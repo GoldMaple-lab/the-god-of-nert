@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>The Genuis</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600&family=Orbitron:wght@500;700&family=Bangers&family=Prompt:wght@300;500&display=swap" rel="stylesheet">
+    
+    <style>
+        /* ================= RESET & BASE STYLES ================= */
+        body, html { 
+            margin: 0; padding: 0; width: 100%; height: 100%; 
+            overflow: hidden; background-color: #000; 
+            -webkit-user-select: none; user-select: none; 
+            transition: background 0.5s ease; 
+        }
+        
+        /* บังคับหน้าแรกให้ใช้ฟอนต์ Sarabun เสมอ */
+        #start-screen { font-family: 'Sarabun', sans-serif !important; }
+
+        #main-wrapper { position: fixed; top: 0; left: 0; width: 100%; height: 100dvh; }
+        video, canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
+        
+        /* ================= ANIMATIONS ================= */
+        /* Scanline GPU Optimized (แก้ปัญหาหน่วง) */
+        @keyframes scanline-smooth {
+            0% { transform: translateY(-10%); opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { transform: translateY(105dvh); opacity: 0; }
+        }
+
+        .scanner-line {
+            position: absolute; top: 0; left: 0; width: 100%;
+            pointer-events: none; z-index: 5;
+            animation: scanline-smooth 3s linear infinite;
+            will-change: transform, opacity;
+            -webkit-backface-visibility: hidden; backface-visibility: hidden; transform: translateZ(0);
+        }
+
+        /* UI Components */
+        .ui-panel { transition: all 0.3s ease; backdrop-filter: blur(5px); }
+        .ui-btn { transition: all 0.2s ease; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; }
+        .ui-btn:active { transform: scale(0.95); }
+
+        /* ================= THEME: IRON MAN (JARVIS) ================= */
+        body.theme-adult { font-family: 'Orbitron', sans-serif; }
+        body.theme-adult .scanner-line { background: #00FFFF; box-shadow: 0 0 15px #00FFFF; height: 2px; }
+        
+        body.theme-adult .ui-panel {
+            background: rgba(0, 10, 20, 0.6);
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            border-radius: 4px;
+            box-shadow: 0 0 10px rgba(0, 255, 255, 0.1);
+        }
+        body.theme-adult .ui-btn {
+            background: rgba(0, 20, 30, 0.8);
+            border: 1px solid #00FFFF;
+            border-radius: 2px;
+            color: #00FFFF;
+        }
+        body.theme-adult .ui-text-accent { color: #00FFFF; text-shadow: 0 0 5px #00FFFF; }
+        /* มุม HUD เฉพาะธีม Iron Man */
+        body.theme-adult .hud-corner {
+            position: absolute; width: 20px; height: 20px; 
+            border-color: #00FFFF; border-style: solid; 
+            opacity: 0.7; pointer-events: none; z-index: 10;
+        }
+
+        /* ================= THEME: BEN 10 (OMNITRIX) ================= */
+        body.theme-boy { font-family: 'Bangers', cursive; letter-spacing: 1px; }
+        body.theme-boy .scanner-line { background: #00FF00; box-shadow: 0 0 20px #00FF00; height: 10px; opacity: 0.5; }
+        
+        body.theme-boy .ui-panel {
+            background: rgba(0, 0, 0, 0.8);
+            border: 3px solid #00FF00;
+            border-radius: 12px;
+            box-shadow: inset 0 0 20px rgba(0, 255, 0, 0.2);
+        }
+        body.theme-boy .ui-btn {
+            background: #000;
+            border: 2px solid #00FF00;
+            border-radius: 8px;
+            color: #00FF00;
+            text-transform: uppercase;
+        }
+        body.theme-boy .ui-text-accent { color: #00FF00; -webkit-text-stroke: 0.5px black; }
+
+        /* ================= THEME: BARBIE (CUTE) ================= */
+        body.theme-girl { font-family: 'Prompt', sans-serif; }
+        body.theme-girl .scanner-line {
+            background: linear-gradient(90deg, transparent, #ff69b4, transparent);
+            height: 50px; opacity: 0.3; filter: blur(5px);
+            animation: scanline-smooth 4s ease-in-out infinite; 
+        }
+        body.theme-girl .ui-panel {
+            background: rgba(255, 255, 255, 0.3);
+            border: 2px solid #fff;
+            border-radius: 25px;
+            box-shadow: 0 4px 15px rgba(255, 105, 180, 0.3);
+        }
+        body.theme-girl .ui-btn {
+            background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+            border: 2px solid white;
+            border-radius: 50px;
+            color: #fff;
+            font-weight: bold;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+        body.theme-girl .ui-text-accent { color: #FF1493; font-weight: 600; }
+
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body class="theme-adult"> 
+
+    <div id="start-screen" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-gray-900 text-white transition-opacity duration-500">
+        
+        <div class="relative w-36 h-36 mb-6">
+            <div class="absolute inset-0 rounded-full border-4 border-cyan-500/30 animate-ping"></div>
+            <div class="absolute inset-0 rounded-full border-[6px] border-cyan-400 flex items-center justify-center bg-gray-800 shadow-[0_0_20px_rgba(34,211,238,0.4)]">
+                <span class="text-5xl font-bold text-white tracking-wider font-mono" style="text-shadow: 0 0 15px #22d3ee;">AI</span>
+            </div>
+        </div>
+
+        <h1 class="text-3xl font-bold mb-2 text-cyan-400">The Genuis</h1>
+        
+        <div class="bg-red-500/20 border border-red-500/50 rounded-lg p-3 mb-6 text-center max-w-xs">
+            <p class="text-xs text-red-200">⚠️ iPhone: โปรดปิด Silent Mode และเปิดเสียง Media ให้สุด</p>
+        </div>
+        
+        <div class="w-64 space-y-4">
+            <div>
+                <label class="text-xs text-gray-500 ml-1">เลือกธีม:</label>
+                <div class="glass-panel border border-gray-600 rounded-lg px-3 py-2 mt-1 bg-gray-800">
+                    <select id="theme-select" class="w-full bg-transparent text-white outline-none text-sm">
+                        <option value="theme-adult">🤖 ไอรอนแมน</option>
+                        <option value="theme-boy">🦖 เบนเทน</option>
+                        <option value="theme-girl">🎀 บาร์บี้</option>
+                    </select>
+                </div>
+            </div>
+            
+            <button id="start-btn" class="w-full py-4 bg-cyan-600 hover:bg-cyan-500 rounded-lg font-bold shadow-lg shadow-cyan-500/30 transition active:scale-95 text-lg">
+                กดเพื่อเริ่มใช้งาน
+            </button>
+        </div>
+        <p id="loading-msg" class="mt-4 text-cyan-300 text-sm animate-pulse hidden">กำลังเตรียมระบบเสียงและโมเดล...</p>
+    </div>
+
+    <div id="main-wrapper" class="hidden">
+        <video id="webcam" autoplay playsinline muted></video>
+        <canvas id="overlay"></canvas>
+        <div class="scanner-line"></div>
+        
+        <div class="hud-corner border-t-2 border-l-2 top-4 left-4 rounded-tl-lg"></div>
+        <div class="hud-corner border-t-2 border-r-2 top-4 right-4 rounded-tr-lg"></div>
+        <div class="hud-corner border-b-2 border-l-2 bottom-4 left-4 rounded-bl-lg"></div>
+        <div class="hud-corner border-b-2 border-r-2 bottom-4 right-4 rounded-br-lg"></div>
+
+        <div class="absolute top-8 left-6 z-20">
+            <div class="ui-panel p-4 min-w-[140px]">
+                <div class="flex items-center gap-2 mb-2 border-b border-white/20 pb-1">
+                    <div class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
+                    <span class="text-xs tracking-widest ui-text-accent">DETECTED</span>
+                </div>
+                <ul id="detected-list" class="text-sm text-white font-medium max-h-[100px] overflow-y-auto">
+                    <li class="opacity-50 text-xs">...</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="absolute bottom-8 left-4 right-4 z-20 flex flex-col gap-3">
+            <div class="ui-panel px-4 py-3 w-full flex items-center justify-between">
+                <span class="text-xs ui-text-accent mr-2 font-bold">FILTER:</span>
+                <select id="object-filter" class="bg-transparent text-white font-medium text-sm outline-none w-full text-right">
+                    </select>
+            </div>
+
+            <div class="grid grid-cols-3 gap-3">
+                <button id="btn-text-lang" class="ui-btn py-3 h-16">
+                    <span class="text-[10px] opacity-70 mb-1">TEXT</span>
+                    <span class="text-lg font-bold text-yellow-400">TH</span>
+                </button>
+                <button id="btn-audio" class="ui-btn py-3 h-16">
+                    <span class="text-[10px] opacity-70 mb-1">AUDIO</span>
+                    <span class="text-lg font-bold text-green-400">ON</span>
+                </button>
+                <button id="btn-camera" class="ui-btn py-3 h-16 bg-white/5">
+                    <span class="text-[10px] opacity-70 mb-1">SWITCH</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ================= 1. CONFIG =================
+        const MODEL_PATH = "./best.onnx";
+        const MODEL_WIDTH = 640;
+        const MODEL_HEIGHT = 640;
+        const CONFIDENCE = 0.1;
+        
+        // ********** แก้ไขรายการสิ่งของที่นี่ **********
+        const LABELS = {
+            'pen': 'ปากกา',
+            'key': 'กุญแจ',
+            'phone': 'โทรศัพท์',
+            'flashdrive': 'แฟลชไดรฟ์',
+            'umbrella': 'ร่ม',
+            // เพิ่มคำอื่นๆ ได้ที่นี่
+        };
+        const CLASS_KEYS = Object.keys(LABELS);
+
+        // ================= 2. STATE VARIABLES =================
+        let session;
+        let isMuted = false;
+        let visualLang = 'th';
+        let currentTheme = 'theme-adult';
+        let currentFilter = 'all';
+        let lastSpoken = new Map();
+        
+        // Performance & Audio State
+        let isProcessing = false;
+        let modelBuffer, offscreenCanvas, offscreenCtx;
+        let synth = window.speechSynthesis;
+        let currentUtterance = null;
+
+        // Camera State
+        let currentStream = null;
+        let videoDevices = [];
+        let currentDeviceIndex = 0;
+        let isSwitching = false;
+
+        // Elements
+        const video = document.getElementById('webcam');
+        const canvas = document.getElementById('overlay');
+        const ctx = canvas.getContext('2d');
+        const listEl = document.getElementById('detected-list');
+        const themeSelect = document.getElementById('theme-select');
+        
+        // ================= 3. THEME HANDLER =================
+        function applyTheme(themeName) {
+            document.body.className = themeName; 
+            currentTheme = themeName;
+        }
+
+        themeSelect.addEventListener('change', (e) => {
+            currentTheme = e.target.value; 
+        });
+
+        // ================= 4. STARTUP LOGIC =================
+        document.getElementById('start-btn').addEventListener('click', async () => {
+            const btn = document.getElementById('start-btn');
+            const msg = document.getElementById('loading-msg');
+            
+            btn.disabled = true;
+            btn.classList.add('opacity-50');
+            msg.classList.remove('hidden');
+
+            applyTheme(currentTheme); 
+            unlockAudioEngine();
+
+            try {
+                // Initialize ONNX Session
+                session = await ort.InferenceSession.create(MODEL_PATH, {
+                    executionProviders: ['webgl', 'wasm'],
+                    graphOptimizationLevel: 'all'
+                });
+                
+                // Memory Optimization Setup
+                const totalPixels = MODEL_WIDTH * MODEL_HEIGHT;
+                modelBuffer = new Float32Array(3 * totalPixels);
+                offscreenCanvas = document.createElement('canvas');
+                offscreenCanvas.width = MODEL_WIDTH;
+                offscreenCanvas.height = MODEL_HEIGHT;
+                offscreenCtx = offscreenCanvas.getContext('2d', { willReadFrequently: true });
+
+                // Start Camera
+                await initCamera();
+
+                // Switch Screens
+                document.getElementById('start-screen').classList.add('opacity-0', 'pointer-events-none');
+                document.getElementById('main-wrapper').classList.remove('hidden');
+                populateFilter();
+                
+                // Start AI Loop
+                requestAnimationFrame(loop);
+
+            } catch (err) {
+                alert("Error: " + err.message);
+                btn.disabled = false;
+                msg.classList.add('hidden');
+            }
+        });
+
+        function unlockAudioEngine() {
+            if (synth.paused) synth.resume();
+            const u = new SpeechSynthesisUtterance("ระบบพร้อมทำงาน");
+            u.lang = 'th-TH';
+            synth.speak(u);
+        }
+
+        // ================= 5. CAMERA SYSTEM =================
+        async function initCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+                stream.getTracks().forEach(t => t.stop()); // Stop temp stream
+
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                videoDevices = devices.filter(d => d.kind === 'videoinput');
+                
+                // Select rear camera preferably
+                const rear = videoDevices.findIndex(d => d.label.toLowerCase().includes('back') || d.label.toLowerCase().includes('rear'));
+                currentDeviceIndex = rear !== -1 ? rear : 0;
+
+                await startStream(videoDevices[currentDeviceIndex]?.deviceId);
+                
+                if (videoDevices.length <= 1) document.getElementById('btn-camera').style.display = 'none';
+            } catch (e) {
+                console.error("Camera Init Error:", e);
+                throw e;
+            }
+        }
+
+        async function startStream(deviceId) {
+            if (currentStream) {
+                currentStream.getTracks().forEach(t => t.stop());
+            }
+            try {
+                const constraints = {
+                    video: { 
+                        deviceId: deviceId ? { exact: deviceId } : undefined,
+                        width: { ideal: 1280 }, 
+                        height: { ideal: 720 } 
+                    }
+                };
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = stream;
+                currentStream = stream;
+                
+                return new Promise(resolve => {
+                    video.onloadedmetadata = () => {
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+                        video.play();
+                        resolve();
+                    };
+                });
+            } catch (err) {
+                console.error("Start Stream Error:", err);
+            }
+        }
+
+        document.getElementById('btn-camera').addEventListener('click', async () => {
+            if (isSwitching || videoDevices.length < 2) return;
+            isSwitching = true;
+            currentDeviceIndex = (currentDeviceIndex + 1) % videoDevices.length;
+            await startStream(videoDevices[currentDeviceIndex].deviceId);
+            isSwitching = false;
+        });
+
+        // ================= 6. UI CONTROLS & AUDIO FEEDBACK =================
+        const btnTextLang = document.getElementById('btn-text-lang');
+        btnTextLang.addEventListener('click', () => {
+            synth.cancel(); // Stop speaking immediately
+            visualLang = visualLang === 'th' ? 'en' : 'th';
+            
+            // Update Button UI
+            const spans = btnTextLang.querySelectorAll('span');
+            spans[1].textContent = visualLang.toUpperCase();
+            spans[1].className = `text-lg font-bold ${visualLang === 'th' ? 'text-yellow-400' : 'text-cyan-400'}`;
+            lastSpoken.clear();
+
+            // Audio Feedback
+            if (visualLang === 'th') speak('ภาษาไทย', 'th');
+            else speak('English', 'en');
+        });
+
+        const btnAudio = document.getElementById('btn-audio');
+        btnAudio.addEventListener('click', () => {
+            synth.cancel();
+            isMuted = !isMuted;
+            
+            // Update Button UI
+            const spans = btnAudio.querySelectorAll('span');
+            spans[1].textContent = isMuted ? 'OFF' : 'ON';
+            spans[1].className = `text-lg font-bold ${isMuted ? 'text-red-400' : 'text-green-400'}`;
+            
+            // Audio Feedback
+            if(isMuted) {
+                const msg = visualLang === 'th' ? 'ปิดเสียง' : 'Voice Off';
+                speak(msg, visualLang);
+            } else {
+                unlockAudioEngine();
+                const msg = visualLang === 'th' ? 'เปิดเสียง' : 'Voice On';
+                speak(msg, visualLang);
+            }
+        });
+
+        function populateFilter() {
+            const select = document.getElementById('object-filter');
+            select.innerHTML = '<option value="all">👁️ ตรวจจับทั้งหมด</option>';
+            CLASS_KEYS.sort().forEach(key => {
+                const option = document.createElement('option');
+                option.value = key;
+                option.textContent = `📦 ${LABELS[key]}`;
+                option.classList.add('text-black');
+                select.appendChild(option);
+            });
+        }
+        document.getElementById('object-filter').addEventListener('change', (e) => currentFilter = e.target.value);
+
+        // ================= 7. AI CORE LOOPS =================
+        async function loop() {
+            requestAnimationFrame(loop);
+            if (isProcessing || video.readyState !== 4 || video.paused || video.ended) return;
+            isProcessing = true;
+            try {
+                const [input, w, h] = preprocess(video);
+                const results = await session.run({ [session.inputNames[0]]: input });
+                const boxes = postprocess(results, w, h);
+                draw(boxes);
+            } catch (e) {
+                console.error(e);
+            } finally {
+                isProcessing = false;
+            }
+        }
+
+        function preprocess(img) {
+            offscreenCtx.drawImage(img, 0, 0, MODEL_WIDTH, MODEL_HEIGHT);
+            const data = offscreenCtx.getImageData(0, 0, MODEL_WIDTH, MODEL_HEIGHT).data;
+            for(let i=0; i<MODEL_WIDTH*MODEL_HEIGHT; i++) {
+                modelBuffer[i] = data[i*4]/255.0;
+                modelBuffer[i+MODEL_WIDTH*MODEL_HEIGHT] = data[i*4+1]/255.0;
+                modelBuffer[i+2*MODEL_WIDTH*MODEL_HEIGHT] = data[i*4+2]/255.0;
+            }
+            return [new ort.Tensor("float32", modelBuffer, [1, 3, MODEL_WIDTH, MODEL_HEIGHT]), img.videoWidth/MODEL_WIDTH, img.videoHeight/MODEL_HEIGHT];
+        }
+
+        function postprocess(results, sx, sy) {
+            const output = results[Object.keys(results)[0]].data;
+            const boxes = [];
+            const numClasses = CLASS_KEYS.length;
+            const totalAnchors = 8400; // YOLO Default for 640x640
+
+            for(let i=0; i<totalAnchors; i++) {
+                let maxScore = 0, cls = -1;
+                for(let c=0; c<numClasses; c++) {
+                    const s = output[(c+4)*totalAnchors+i];
+                    if(s > maxScore) { maxScore = s; cls = c; }
+                }
+                if(maxScore > CONFIDENCE) {
+                    const x=output[0*totalAnchors+i], y=output[1*totalAnchors+i], w=output[2*totalAnchors+i], h=output[3*totalAnchors+i];
+                    boxes.push({
+                        x: (x-w/2)*sx, y: (y-h/2)*sy, w: w*sx, h: h*sy,
+                        score: maxScore, label: CLASS_KEYS[cls]
+                    });
+                }
+            }
+            return nms(boxes);
+        }
+
+        function nms(boxes) {
+            boxes.sort((a,b)=>b.score-a.score);
+            const res=[];
+            while(boxes.length) {
+                const best = boxes.shift();
+                res.push(best);
+                boxes = boxes.filter(b => {
+                    const xx1=Math.max(best.x, b.x), yy1=Math.max(best.y, b.y);
+                    const xx2=Math.min(best.x+best.w, b.x+b.w), yy2=Math.min(best.y+best.h, b.y+b.h);
+                    const inter=Math.max(0,xx2-xx1)*Math.max(0,yy2-yy1);
+                    return (inter/(best.w*best.h+b.w*b.h-inter)) < 0.5;
+                });
+            }
+            return res;
+        }
+
+        // ================= 8. DRAWING & SPEECH LOGIC =================
+        function draw(boxes) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const foundSet = new Set();
+            const now = Date.now();
+
+            // Setup Style based on Theme
+            let strokeColor, fontStyle, textColor;
+            if (currentTheme === 'theme-adult') { 
+                strokeColor = '#00FFFF'; fontStyle = '18px Orbitron'; textColor = '#00FFFF'; 
+            } else if (currentTheme === 'theme-boy') { 
+                strokeColor = '#00FF00'; fontStyle = 'bold 22px Bangers'; textColor = '#000'; 
+            } else { 
+                strokeColor = '#FF69B4'; fontStyle = 'bold 20px Prompt'; textColor = '#FFF'; 
+            }
+
+            boxes.forEach(box => {
+                if (currentFilter !== 'all' && box.label !== currentFilter) return;
+                
+                const displayText = visualLang === 'th' ? LABELS[box.label] : box.label;
+                const speakText = visualLang === 'th' ? LABELS[box.label] : box.label;
+                foundSet.add(displayText);
+
+                ctx.lineWidth = 3;
+                
+                // --- DRAWING SHAPES BY THEME ---
+                if (currentTheme === 'theme-adult') {
+                    // Iron Man: HUD Brackets
+                    ctx.strokeStyle = strokeColor;
+                    const len = Math.min(box.w, box.h) * 0.2;
+                    ctx.beginPath();
+                    ctx.moveTo(box.x, box.y+len); ctx.lineTo(box.x, box.y); ctx.lineTo(box.x+len, box.y);
+                    ctx.moveTo(box.x+box.w-len, box.y); ctx.lineTo(box.x+box.w, box.y); ctx.lineTo(box.x+box.w, box.y+len);
+                    ctx.moveTo(box.x+box.w, box.y+box.h-len); ctx.lineTo(box.x+box.w, box.y+box.h); ctx.lineTo(box.x+box.w-len, box.y+box.h);
+                    ctx.moveTo(box.x+len, box.y+box.h); ctx.lineTo(box.x, box.y+box.h); ctx.lineTo(box.x, box.y+box.h-len);
+                    ctx.stroke();
+                    // Label
+                    ctx.fillStyle = 'rgba(0, 30, 40, 0.7)';
+                    ctx.fillRect(box.x, box.y - 30, ctx.measureText(displayText).width + 20, 25);
+                    ctx.fillStyle = textColor; ctx.font = fontStyle; ctx.fillText(displayText, box.x + 10, box.y - 10);
+                } 
+                else if (currentTheme === 'theme-boy') {
+                    // Ben 10: Square Box
+                    ctx.strokeStyle = strokeColor; ctx.strokeRect(box.x, box.y, box.w, box.h);
+                    ctx.fillStyle = '#00FF00'; ctx.fillRect(box.x, box.y - 30, ctx.measureText(displayText).width + 20, 30);
+                    ctx.fillStyle = textColor; ctx.font = fontStyle; ctx.fillText(displayText, box.x + 5, box.y - 8);
+                }
+                else {
+                    // Barbie: Dashed & Round
+                    ctx.strokeStyle = strokeColor; ctx.setLineDash([15, 10]); ctx.strokeRect(box.x, box.y, box.w, box.h); ctx.setLineDash([]);
+                    ctx.fillStyle = 'rgba(255, 105, 180, 0.9)'; const tw = ctx.measureText(displayText).width + 30;
+                    ctx.beginPath(); ctx.roundRect(box.x, box.y-35, tw, 30, 15); ctx.fill();
+                    ctx.fillStyle = textColor; ctx.font = fontStyle; ctx.fillText(displayText, box.x + 15, box.y - 12);
+                }
+
+                // --- SPEECH TRIGGER ---
+                // Only speak if NOT muted AND (never spoken OR spoken long ago)
+                if(!isMuted && (!lastSpoken.get(box.label) || now - lastSpoken.get(box.label) > 5000)) {
+                    speak(speakText, visualLang);
+                    lastSpoken.set(box.label, now);
+                }
+            });
+
+            // Update List UI
+            listEl.innerHTML = foundSet.size ? [...foundSet].map(t => `<li class="mb-1">🔹 ${t}</li>`).join('') : '<li class="opacity-50 text-xs">...</li>';
+        }
+
+        // --- Robust Speech Function ---
+        function speak(text, langCode) {
+            // If system is already speaking, check if we should interrupt
+            // We interrupt only if it's a UI command (button click cancels previous speech)
+            // But here inside draw loop, we generally wait.
+            if (synth.speaking && !synth.paused) return; 
+
+            const u = new SpeechSynthesisUtterance(text);
+            u.lang = langCode === 'th' ? 'th-TH' : 'en-US';
+            u.rate = 1.0;
+            
+            // Keep reference to prevent GC
+            currentUtterance = u; 
+            u.onend = () => currentUtterance = null;
+            
+            // Find best voice
+            const voice = synth.getVoices().find(v => v.lang.includes(langCode === 'th' ? 'th' : 'en'));
+            if (voice) u.voice = voice;
+            
+            synth.speak(u);
+        }
+    </script>
+</body>
+</html>
