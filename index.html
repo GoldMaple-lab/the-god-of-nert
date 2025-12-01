@@ -3,575 +3,364 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>The Genuis</title>
+    <title>The Genius: Ultimate Warp</title>
     
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600&family=Orbitron:wght@500;700&family=Bangers&family=Prompt:wght@300;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Bangers&family=Prompt:wght@300;500;700&display=swap" rel="stylesheet">
     
     <style>
-        /* ================= RESET & BASE STYLES ================= */
-        body, html { 
-            margin: 0; padding: 0; width: 100%; height: 100%; 
-            overflow: hidden; background-color: #000; 
-            -webkit-user-select: none; user-select: none; 
-            transition: background 0.5s ease; 
-        }
-        
-        /* บังคับหน้าแรกให้ใช้ฟอนต์ Sarabun เสมอ */
-        #start-screen { font-family: 'Sarabun', sans-serif !important; }
+        body { background: #000; margin: 0; overflow: hidden; touch-action: none; font-family: 'Prompt', sans-serif; }
+        #stage { position: relative; width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; background: #000; }
+        video, canvas { position: absolute; max-width: 100%; max-height: 100%; object-fit: contain; }
 
-        #main-wrapper { position: fixed; top: 0; left: 0; width: 100%; height: 100dvh; }
-        video, canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
-        
-        /* ================= ANIMATIONS ================= */
-        /* Scanline GPU Optimized (แก้ปัญหาหน่วง) */
-        @keyframes scanline-smooth {
-            0% { transform: translateY(-10%); opacity: 0; }
-            10% { opacity: 1; }
-            90% { opacity: 1; }
-            100% { transform: translateY(105dvh); opacity: 0; }
+        /* === ANIMATION STYLES === */
+        .vanish { opacity: 0 !important; pointer-events: none; transition: opacity 0.2s ease; }
+
+        /* หมุนและขยายแบบรวดเร็ว (Warp) */
+        .warp-speed {
+            animation: warpAnim 2.0s cubic-bezier(0.7, 0, 0.3, 1) forwards;
         }
 
-        .scanner-line {
-            position: absolute; top: 0; left: 0; width: 100%;
-            pointer-events: none; z-index: 5;
-            animation: scanline-smooth 3s linear infinite;
-            will-change: transform, opacity;
-            -webkit-backface-visibility: hidden; backface-visibility: hidden; transform: translateZ(0);
+        @keyframes warpAnim {
+            0% { transform: scale(1) rotate(0deg); opacity: 1; border-color: #00FFFF; }
+            40% { transform: scale(1.5) rotate(180deg); opacity: 1; border-color: #FF0000; box-shadow: 0 0 50px #FF0000; }
+            80% { transform: scale(10) rotate(720deg); opacity: 0.8; letter-spacing: 20px; filter: blur(2px); border-color: #FFFFFF;}
+            100% { transform: scale(100); opacity: 0; }
         }
 
-        /* UI Components */
-        .ui-panel { transition: all 0.3s ease; backdrop-filter: blur(5px); }
-        .ui-btn { transition: all 0.2s ease; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; }
-        .ui-btn:active { transform: scale(0.95); }
+        /* แสงระเบิดตอนจบ */
+        .flash-bang {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: white; z-index: 100;
+            pointer-events: none;
+            animation: flashAnim 0.8s ease-out forwards;
+        }
+        @keyframes flashAnim { 0% { opacity: 1; } 100% { opacity: 0; } }
 
-        /* ================= THEME: IRON MAN (JARVIS) ================= */
-        body.theme-adult { font-family: 'Orbitron', sans-serif; }
-        body.theme-adult .scanner-line { background: #00FFFF; box-shadow: 0 0 15px #00FFFF; height: 2px; }
-        
-        body.theme-adult .ui-panel {
-            background: rgba(0, 10, 20, 0.6);
-            border: 1px solid rgba(0, 255, 255, 0.3);
-            border-radius: 4px;
-            box-shadow: 0 0 10px rgba(0, 255, 255, 0.1);
-        }
-        body.theme-adult .ui-btn {
-            background: rgba(0, 20, 30, 0.8);
-            border: 1px solid #00FFFF;
-            border-radius: 2px;
-            color: #00FFFF;
-        }
-        body.theme-adult .ui-text-accent { color: #00FFFF; text-shadow: 0 0 5px #00FFFF; }
-        /* มุม HUD เฉพาะธีม Iron Man */
-        body.theme-adult .hud-corner {
-            position: absolute; width: 20px; height: 20px; 
-            border-color: #00FFFF; border-style: solid; 
-            opacity: 0.7; pointer-events: none; z-index: 10;
-        }
-
-        /* ================= THEME: BEN 10 (OMNITRIX) ================= */
-        body.theme-boy { font-family: 'Bangers', cursive; letter-spacing: 1px; }
-        body.theme-boy .scanner-line { background: #00FF00; box-shadow: 0 0 20px #00FF00; height: 10px; opacity: 0.5; }
-        
-        body.theme-boy .ui-panel {
-            background: rgba(0, 0, 0, 0.8);
-            border: 3px solid #00FF00;
-            border-radius: 12px;
-            box-shadow: inset 0 0 20px rgba(0, 255, 0, 0.2);
-        }
-        body.theme-boy .ui-btn {
-            background: #000;
-            border: 2px solid #00FF00;
-            border-radius: 8px;
-            color: #00FF00;
-            text-transform: uppercase;
-        }
-        body.theme-boy .ui-text-accent { color: #00FF00; -webkit-text-stroke: 0.5px black; }
-
-        /* ================= THEME: BARBIE (CUTE) ================= */
-        body.theme-girl { font-family: 'Prompt', sans-serif; }
-        body.theme-girl .scanner-line {
-            background: linear-gradient(90deg, transparent, #ff69b4, transparent);
-            height: 50px; opacity: 0.3; filter: blur(5px);
-            animation: scanline-smooth 4s ease-in-out infinite; 
-        }
-        body.theme-girl .ui-panel {
-            background: rgba(255, 255, 255, 0.3);
-            border: 2px solid #fff;
-            border-radius: 25px;
-            box-shadow: 0 4px 15px rgba(255, 105, 180, 0.3);
-        }
-        body.theme-girl .ui-btn {
-            background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
-            border: 2px solid white;
-            border-radius: 50px;
-            color: #fff;
-            font-weight: bold;
-            text-shadow: 0 1px 2px rgba(0,0,0,0.1);
-        }
-        body.theme-girl .ui-text-accent { color: #FF1493; font-weight: 600; }
-
+        /* UI ELEMENTS */
         .hidden { display: none !important; }
+        .ui-box { background: rgba(0, 20, 30, 0.85); border: 1px solid #00FFFF; border-radius: 4px; box-shadow: 0 0 10px rgba(0,255,255,0.2); }
+        .ui-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
+        .pointer-auto { pointer-events: auto; }
+        
+        /* THEMES */
+        body.theme-ironman .text-accent { color: #00FFFF; text-shadow: 0 0 5px #00FFFF; font-family: 'Orbitron', sans-serif; }
+        body.theme-ben10 .ui-box { border-color: #00FF00; }
+        body.theme-ben10 .text-accent { color: #00FF00; font-family: 'Bangers', cursive; }
+        body.theme-barbie .ui-box { border-color: #fff; background: rgba(255, 255, 255, 0.4); }
+        body.theme-barbie .text-accent { color: #FF1493; font-weight: 700; }
     </style>
 </head>
-<body class="theme-adult"> 
+<body class="theme-ironman">
 
-    <div id="start-screen" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-gray-900 text-white transition-opacity duration-500">
+    <div id="start-screen" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-gray-900 text-white pointer-events-auto transition-colors duration-300">
         
-        <div class="relative w-36 h-36 mb-6">
+        <div id="logo-container" class="relative w-48 h-48 flex items-center justify-center z-20 transition-transform duration-1000">
             <div class="absolute inset-0 rounded-full border-4 border-cyan-500/30 animate-ping"></div>
-            <div class="absolute inset-0 rounded-full border-[6px] border-cyan-400 flex items-center justify-center bg-gray-800 shadow-[0_0_20px_rgba(34,211,238,0.4)]">
-                <span class="text-5xl font-bold text-white tracking-wider font-mono" style="text-shadow: 0 0 15px #22d3ee;">AI</span>
-            </div>
-        </div>
-
-        <h1 class="text-3xl font-bold mb-2 text-cyan-400">The Genuis</h1>
-        
-        <div class="bg-red-500/20 border border-red-500/50 rounded-lg p-3 mb-6 text-center max-w-xs">
-            <p class="text-xs text-red-200">⚠️ iPhone: โปรดปิด Silent Mode และเปิดเสียง Media ให้สุด</p>
-        </div>
-        
-        <div class="w-64 space-y-4">
-            <div>
-                <label class="text-xs text-gray-500 ml-1">เลือกธีม:</label>
-                <div class="glass-panel border border-gray-600 rounded-lg px-3 py-2 mt-1 bg-gray-800">
-                    <select id="theme-select" class="w-full bg-transparent text-white outline-none text-sm">
-                        <option value="theme-adult">🤖 ไอรอนแมน</option>
-                        <option value="theme-boy">🦖 เบนเทน</option>
-                        <option value="theme-girl">🎀 บาร์บี้</option>
-                    </select>
+            <div class="absolute inset-0 rounded-full border-[6px] border-cyan-400 flex items-center justify-center bg-gray-800 shadow-[0_0_50px_#00FFFF]">
+                <div class="text-center transition-all duration-500">
+                    <div class="text-xs text-cyan-200 tracking-widest">THE GENIUS</div>
+                    <div class="text-xl font-bold font-[Orbitron] text-cyan-400 leading-tight">ULTIMATE<br>EDITION</div>
                 </div>
             </div>
-            
-            <button id="start-btn" class="w-full py-4 bg-cyan-600 hover:bg-cyan-500 rounded-lg font-bold shadow-lg shadow-cyan-500/30 transition active:scale-95 text-lg">
-                กดเพื่อเริ่มใช้งาน
-            </button>
         </div>
-        <p id="loading-msg" class="mt-4 text-cyan-300 text-sm animate-pulse hidden">กำลังเตรียมระบบเสียงและโมเดล...</p>
+        
+        <div id="controls-container" class="w-64 space-y-4 mt-10 transition-opacity duration-300">
+            <button id="start-btn" disabled class="w-full py-4 bg-gray-600 rounded-lg font-bold transition text-lg opacity-50 cursor-not-allowed">
+                รอโหลดเสียง...
+            </button>
+            <p id="loading-txt" class="text-center text-cyan-300 text-xs animate-pulse">กำลังโหลดสมองกล...</p>
+            <div class="bg-red-900/50 p-2 rounded border border-red-500/30 text-center">
+                <p class="text-[10px] text-red-200">⚠️ iPhone: เปิดเสียงให้สุด</p>
+            </div>
+        </div>
     </div>
 
-    <div id="main-wrapper" class="hidden">
+    <div id="flash-layer" class="hidden"></div>
+
+    <div id="stage" class="hidden">
         <video id="webcam" autoplay playsinline muted></video>
         <canvas id="overlay"></canvas>
-        <div class="scanner-line"></div>
-        
-        <div class="hud-corner border-t-2 border-l-2 top-4 left-4 rounded-tl-lg"></div>
-        <div class="hud-corner border-t-2 border-r-2 top-4 right-4 rounded-tr-lg"></div>
-        <div class="hud-corner border-b-2 border-l-2 bottom-4 left-4 rounded-bl-lg"></div>
-        <div class="hud-corner border-b-2 border-r-2 bottom-4 right-4 rounded-br-lg"></div>
+    </div>
 
-        <div class="absolute top-8 left-6 z-20">
-            <div class="ui-panel p-4 min-w-[140px]">
-                <div class="flex items-center gap-2 mb-2 border-b border-white/20 pb-1">
+    <div id="hud" class="ui-overlay hidden">
+        <div class="absolute top-4 left-4 pointer-auto">
+            <div class="ui-box p-3 min-w-[140px]">
+                <div class="flex justify-between items-center mb-2 border-b border-white/20 pb-1">
+                    <span class="text-[10px] text-accent font-bold tracking-widest">DETECTED</span>
                     <div class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
-                    <span class="text-xs tracking-widest ui-text-accent">DETECTED</span>
                 </div>
-                <ul id="detected-list" class="text-sm text-white font-medium max-h-[100px] overflow-y-auto">
-                    <li class="opacity-50 text-xs">...</li>
+                <ul id="list" class="text-sm text-white font-[Prompt] max-h-[120px] overflow-y-auto">
+                    <li class="opacity-50 text-xs">Scanning...</li>
                 </ul>
             </div>
         </div>
 
-        <div class="absolute bottom-8 left-4 right-4 z-20 flex flex-col gap-3">
-            <div class="ui-panel px-4 py-3 w-full flex items-center justify-between">
-                <span class="text-xs ui-text-accent mr-2 font-bold">FILTER:</span>
-                <select id="object-filter" class="bg-transparent text-white font-medium text-sm outline-none w-full text-right">
+        <div class="absolute bottom-6 w-full px-4 flex flex-col gap-3 pointer-auto">
+            <div class="flex gap-2">
+                <div class="ui-box flex-1 px-3 py-2 flex items-center">
+                    <span class="text-[10px] text-accent mr-2">FILTER:</span>
+                    <select id="filter-select" class="bg-transparent text-white text-sm w-full outline-none text-right font-[Prompt]"><option value="all">👁️ ทั้งหมด</option></select>
+                </div>
+                <div class="ui-box px-3 py-2 flex items-center">
+                    <span class="text-[10px] text-accent mr-2">THEME:</span>
+                    <select id="theme-select" class="bg-transparent text-white text-sm outline-none font-[Prompt]">
+                        <option value="theme-ironman">Iron Man</option>
+                        <option value="theme-ben10">Ben 10</option>
+                        <option value="theme-barbie">Barbie</option>
                     </select>
+                </div>
             </div>
 
             <div class="grid grid-cols-3 gap-3">
-                <button id="btn-text-lang" class="ui-btn py-3 h-16">
-                    <span class="text-[10px] opacity-70 mb-1">TEXT</span>
-                    <span class="text-lg font-bold text-yellow-400">TH</span>
+                <button id="btn-lang" class="ui-box py-3 flex flex-col items-center justify-center active:scale-95 transition">
+                    <span class="text-[8px] opacity-70 mb-1">LANG</span>
+                    <span id="lang-txt" class="text-lg font-bold text-yellow-400">TH</span>
                 </button>
-                <button id="btn-audio" class="ui-btn py-3 h-16">
-                    <span class="text-[10px] opacity-70 mb-1">AUDIO</span>
-                    <span class="text-lg font-bold text-green-400">ON</span>
+                <button id="btn-audio" class="ui-box py-3 flex flex-col items-center justify-center active:scale-95 transition">
+                    <span class="text-[8px] opacity-70 mb-1">AUDIO</span>
+                    <span id="audio-txt" class="text-lg font-bold text-green-400">ON</span>
                 </button>
-                <button id="btn-camera" class="ui-btn py-3 h-16 bg-white/5">
-                    <span class="text-[10px] opacity-70 mb-1">SWITCH</span>
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
+                <button id="btn-cam" class="ui-box py-3 flex flex-col items-center justify-center active:scale-95 transition bg-white/10">
+                    <span class="text-[8px] opacity-70 mb-1">SWITCH</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                 </button>
             </div>
         </div>
     </div>
 
     <script>
-        // ================= 1. CONFIG =================
-        const MODEL_PATH = "./best.onnx";
-        const MODEL_WIDTH = 640;
-        const MODEL_HEIGHT = 640;
-        const CONFIDENCE = 0.1;
-        
-        // ********** แก้ไขรายการสิ่งของที่นี่ **********
-        const LABELS = {
-            'pen': 'ปากกา',
-            'key': 'กุญแจ',
-            'phone': 'โทรศัพท์',
-            'flashdrive': 'แฟลชไดรฟ์',
-            'umbrella': 'ร่ม',
-            // เพิ่มคำอื่นๆ ได้ที่นี่
-        };
-        const CLASS_KEYS = Object.keys(LABELS);
+        const CLASSES = ["pen", "marker", "pencil", "notebook", "book", "scissors", "stapler", "computer monitor", "laptop", "mouse", "keyboard", "headphones", "glasses", "can", "soda can", "cup", "water bottle", "coffee mug", "plate", "bowl", "spoon", "fork", "keys", "wallet", "smartphone", "bag", "watch", "remote control", "fan", "chair", "lamp", "trash can"];
+        const DICT = {'pen': {th:'ปากกา', en:'Pen'}, 'marker': {th:'เมจิก', en:'Marker'}, 'pencil': {th:'ดินสอ', en:'Pencil'}, 'notebook': {th:'สมุด', en:'Notebook'}, 'book': {th:'หนังสือ', en:'Book'}, 'scissors': {th:'กรรไกร', en:'Scissors'}, 'stapler': {th:'แม็ก', en:'Stapler'}, 'computer monitor': {th:'จอคอม', en:'Monitor'}, 'laptop': {th:'โน้ตบุ๊ก', en:'Laptop'}, 'mouse': {th:'เมาส์', en:'Mouse'}, 'keyboard': {th:'คีย์บอร์ด', en:'Keyboard'}, 'headphones': {th:'หูฟัง', en:'Headphones'}, 'glasses': {th:'แว่นตา', en:'Glasses'}, 'can': {th:'กระป๋อง', en:'Can'}, 'soda can': {th:'น้ำอัดลม', en:'Soda'}, 'cup': {th:'แก้ว', en:'Cup'}, 'water bottle': {th:'ขวดน้ำ', en:'Bottle'}, 'coffee mug': {th:'แก้วกาแฟ', en:'Mug'}, 'plate': {th:'จาน', en:'Plate'}, 'bowl': {th:'ชาม', en:'Bowl'}, 'spoon': {th:'ช้อน', en:'Spoon'}, 'fork': {th:'ส้อม', en:'Fork'}, 'keys': {th:'กุญแจ', en:'Keys'}, 'wallet': {th:'กระเป๋าตังค์', en:'Wallet'}, 'smartphone': {th:'มือถือ', en:'Phone'}, 'bag': {th:'กระเป๋า', en:'Bag'}, 'watch': {th:'นาฬิกา', en:'Watch'}, 'remote control': {th:'รีโมท', en:'Remote'}, 'fan': {th:'พัดลม', en:'Fan'}, 'chair': {th:'เก้าอี้', en:'Chair'}, 'lamp': {th:'โคมไฟ', en:'Lamp'}, 'trash can': {th:'ถังขยะ', en:'Trash'}};
+        const MODEL_PATH = './yolov8s-worldv2.onnx';
 
-        // ================= 2. STATE VARIABLES =================
         let session;
         let isMuted = false;
-        let visualLang = 'th';
-        let currentTheme = 'theme-adult';
+        let lang = 'th';
         let currentFilter = 'all';
         let lastSpoken = new Map();
-        
-        // Performance & Audio State
-        let isProcessing = false;
-        let modelBuffer, offscreenCanvas, offscreenCtx;
         let synth = window.speechSynthesis;
-        let currentUtterance = null;
+        let voices = [];
+        let videoDevices = [], deviceIdx = 0;
+        let audioCtx; // For Sound FX
 
-        // Camera State
-        let currentStream = null;
-        let videoDevices = [];
-        let currentDeviceIndex = 0;
-        let isSwitching = false;
-
-        // Elements
         const video = document.getElementById('webcam');
         const canvas = document.getElementById('overlay');
         const ctx = canvas.getContext('2d');
-        const listEl = document.getElementById('detected-list');
-        const themeSelect = document.getElementById('theme-select');
-        
-        // ================= 3. THEME HANDLER =================
-        function applyTheme(themeName) {
-            document.body.className = themeName; 
-            currentTheme = themeName;
+        const list = document.getElementById('list');
+        const filterSelect = document.getElementById('filter-select');
+        const startBtn = document.getElementById('start-btn');
+
+        // ================= SCI-FI SOUND FX =================
+        function playChargingSound() {
+            if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            
+            // สร้างเสียง วี๊ดดดด (Low to High Pitch)
+            osc.type = 'lowpass';
+            osc.frequency.setValueAtTime(100, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(150, audioCtx.currentTime + 1.5); // ขึ้นสูงใน 1.5 วิ
+            
+            gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            gain.gain.linearRampToValueAtTime(0.5, audioCtx.currentTime + 1.0);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 1.5);
+
+            osc.start();
+            osc.stop(audioCtx.currentTime + 1.5);
         }
 
-        themeSelect.addEventListener('change', (e) => {
-            currentTheme = e.target.value; 
-        });
-
-        // ================= 4. STARTUP LOGIC =================
-        document.getElementById('start-btn').addEventListener('click', async () => {
-            const btn = document.getElementById('start-btn');
-            const msg = document.getElementById('loading-msg');
-            
-            btn.disabled = true;
-            btn.classList.add('opacity-50');
-            msg.classList.remove('hidden');
-
-            applyTheme(currentTheme); 
-            unlockAudioEngine();
-
-            try {
-                // Initialize ONNX Session
-                session = await ort.InferenceSession.create(MODEL_PATH, {
-                    executionProviders: ['webgl', 'wasm'],
-                    graphOptimizationLevel: 'all'
-                });
-                
-                // Memory Optimization Setup
-                const totalPixels = MODEL_WIDTH * MODEL_HEIGHT;
-                modelBuffer = new Float32Array(3 * totalPixels);
-                offscreenCanvas = document.createElement('canvas');
-                offscreenCanvas.width = MODEL_WIDTH;
-                offscreenCanvas.height = MODEL_HEIGHT;
-                offscreenCtx = offscreenCanvas.getContext('2d', { willReadFrequently: true });
-
-                // Start Camera
-                await initCamera();
-
-                // Switch Screens
-                document.getElementById('start-screen').classList.add('opacity-0', 'pointer-events-none');
-                document.getElementById('main-wrapper').classList.remove('hidden');
-                populateFilter();
-                
-                // Start AI Loop
-                requestAnimationFrame(loop);
-
-            } catch (err) {
-                alert("Error: " + err.message);
-                btn.disabled = false;
-                msg.classList.add('hidden');
+        // ================= VOICE SYSTEM =================
+        function loadVoices() {
+            voices = synth.getVoices();
+            if(voices.length > 0) {
+                startBtn.disabled = false;
+                startBtn.classList.remove('bg-gray-600', 'opacity-50', 'cursor-not-allowed');
+                startBtn.classList.add('bg-cyan-600', 'hover:bg-cyan-500');
+                startBtn.textContent = "เริ่มใช้งาน";
+                document.getElementById('loading-txt').classList.add('hidden');
             }
-        });
+        }
+        loadVoices();
+        if (speechSynthesis.onvoiceschanged !== undefined) speechSynthesis.onvoiceschanged = loadVoices;
+        setTimeout(() => { if(startBtn.disabled) { startBtn.disabled = false; startBtn.classList.add('bg-cyan-600'); startBtn.textContent = "เริ่มใช้งาน"; } }, 3000);
 
-        function unlockAudioEngine() {
-            if (synth.paused) synth.resume();
-            const u = new SpeechSynthesisUtterance("ระบบพร้อมทำงาน");
-            u.lang = 'th-TH';
+        function speak(text, rate = 1.0, pitch = 1.0, forceEnglish = false) {
+            const u = new SpeechSynthesisUtterance(text);
+            
+            // ถ้า Force English (สำหรับตอนเริ่ม) ให้ใช้เสียงอังกฤษ
+            if (forceEnglish) {
+                u.lang = 'en-US';
+                const enVoice = voices.find(v => v.lang.includes('en') && v.name.includes('Google'));
+                if(enVoice) u.voice = enVoice;
+            } else {
+                u.lang = lang === 'th' ? 'th-TH' : 'en-US';
+                if(lang === 'th') { const v = voices.find(x => x.lang.includes('th')); if(v) u.voice = v; }
+            }
+            
+            u.rate = rate; // ความเร็ว
+            u.pitch = pitch; // ความต่ำ/สูง
+            u.volume = 1.0;
             synth.speak(u);
         }
 
-        // ================= 5. CAMERA SYSTEM =================
-        async function initCamera() {
+        // ================= UI EVENTS =================
+        Object.keys(DICT).sort().forEach(k => {
+            const opt = document.createElement('option'); opt.value = k; opt.textContent = `🔹 ${DICT[k].th}`; opt.classList.add('text-black');
+            filterSelect.appendChild(opt);
+        });
+        filterSelect.addEventListener('change', (e) => currentFilter = e.target.value);
+        document.getElementById('theme-select').addEventListener('change', (e) => document.body.className = e.target.value);
+        document.getElementById('btn-lang').addEventListener('click', () => { lang = lang==='th'?'en':'th'; document.getElementById('lang-txt').textContent = lang.toUpperCase(); speak(lang==='th'?"ภาษาไทย":"English"); });
+        document.getElementById('btn-audio').addEventListener('click', () => { isMuted=!isMuted; const t=document.getElementById('audio-txt'); t.textContent=isMuted?'OFF':'ON'; t.className=isMuted?'text-lg font-bold text-red-400':'text-lg font-bold text-green-400'; if(!isMuted) speak("On"); });
+
+        // ================= START SEQUENCE (EDGY STYLE) =================
+        startBtn.addEventListener('click', async () => {
+            // 1. Voice 1: Initializing
+            speak("Initializing Core Systems...", 1.3, 0.8, true); // เร็ว+เสียงต่ำ = เท่
+            
+            // 2. ซ่อนปุ่ม
+            document.getElementById('controls-container').classList.add('vanish');
+
+            // 3. เริ่ม Sound FX (เสียงชาร์จ)
+            playChargingSound();
+
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-                stream.getTracks().forEach(t => t.stop()); // Stop temp stream
-
-                const devices = await navigator.mediaDevices.enumerateDevices();
-                videoDevices = devices.filter(d => d.kind === 'videoinput');
-                
-                // Select rear camera preferably
-                const rear = videoDevices.findIndex(d => d.label.toLowerCase().includes('back') || d.label.toLowerCase().includes('rear'));
-                currentDeviceIndex = rear !== -1 ? rear : 0;
-
-                await startStream(videoDevices[currentDeviceIndex]?.deviceId);
-                
-                if (videoDevices.length <= 1) document.getElementById('btn-camera').style.display = 'none';
-            } catch (e) {
-                console.error("Camera Init Error:", e);
-                throw e;
-            }
-        }
-
-        async function startStream(deviceId) {
-            if (currentStream) {
-                currentStream.getTracks().forEach(t => t.stop());
-            }
-            try {
-                const constraints = {
-                    video: { 
-                        deviceId: deviceId ? { exact: deviceId } : undefined,
-                        width: { ideal: 1280 }, 
-                        height: { ideal: 720 } 
-                    }
-                };
-                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                // Load Camera & Model
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } });
                 video.srcObject = stream;
-                currentStream = stream;
-                
-                return new Promise(resolve => {
-                    video.onloadedmetadata = () => {
-                        canvas.width = video.videoWidth;
-                        canvas.height = video.videoHeight;
-                        video.play();
-                        resolve();
-                    };
-                });
-            } catch (err) {
-                console.error("Start Stream Error:", err);
-            }
-        }
+                await new Promise(r => video.onloadedmetadata = r);
+                session = await ort.InferenceSession.create(MODEL_PATH, { executionProviders: ['wasm'] });
 
-        document.getElementById('btn-camera').addEventListener('click', async () => {
-            if (isSwitching || videoDevices.length < 2) return;
-            isSwitching = true;
-            currentDeviceIndex = (currentDeviceIndex + 1) % videoDevices.length;
-            await startStream(videoDevices[currentDeviceIndex].deviceId);
-            isSwitching = false;
-        });
+                // 4. เริ่มหมุน (Warp)
+                const logo = document.getElementById('logo-container');
+                logo.classList.add('warp-speed');
 
-        // ================= 6. UI CONTROLS & AUDIO FEEDBACK =================
-        const btnTextLang = document.getElementById('btn-text-lang');
-        btnTextLang.addEventListener('click', () => {
-            synth.cancel(); // Stop speaking immediately
-            visualLang = visualLang === 'th' ? 'en' : 'th';
-            
-            // Update Button UI
-            const spans = btnTextLang.querySelectorAll('span');
-            spans[1].textContent = visualLang.toUpperCase();
-            spans[1].className = `text-lg font-bold ${visualLang === 'th' ? 'text-yellow-400' : 'text-cyan-400'}`;
-            lastSpoken.clear();
+                // 5. Voice 2: Neural Link
+                setTimeout(() => {
+                    speak("Neural Link... Established.", 1.4, 0.7, true);
+                }, 800);
 
-            // Audio Feedback
-            if (visualLang === 'th') speak('ภาษาไทย', 'th');
-            else speak('English', 'en');
-        });
+                // 6. ระเบิดตู้ม (Finish)
+                setTimeout(() => {
+                    // Voice 3: Online
+                    speak("The Genius... Online.", 1.1, 0.6, true);
 
-        const btnAudio = document.getElementById('btn-audio');
-        btnAudio.addEventListener('click', () => {
-            synth.cancel();
-            isMuted = !isMuted;
-            
-            // Update Button UI
-            const spans = btnAudio.querySelectorAll('span');
-            spans[1].textContent = isMuted ? 'OFF' : 'ON';
-            spans[1].className = `text-lg font-bold ${isMuted ? 'text-red-400' : 'text-green-400'}`;
-            
-            // Audio Feedback
-            if(isMuted) {
-                const msg = visualLang === 'th' ? 'ปิดเสียง' : 'Voice Off';
-                speak(msg, visualLang);
-            } else {
-                unlockAudioEngine();
-                const msg = visualLang === 'th' ? 'เปิดเสียง' : 'Voice On';
-                speak(msg, visualLang);
-            }
-        });
+                    const flash = document.getElementById('flash-layer');
+                    flash.classList.remove('hidden');
+                    flash.classList.add('flash-bang');
+                    document.getElementById('start-screen').classList.add('hidden');
+                    document.getElementById('stage').classList.remove('hidden');
+                    document.getElementById('hud').classList.remove('hidden');
+                    detect();
+                }, 1900);
 
-        function populateFilter() {
-            const select = document.getElementById('object-filter');
-            select.innerHTML = '<option value="all">👁️ ตรวจจับทั้งหมด</option>';
-            CLASS_KEYS.sort().forEach(key => {
-                const option = document.createElement('option');
-                option.value = key;
-                option.textContent = `📦 ${LABELS[key]}`;
-                option.classList.add('text-black');
-                select.appendChild(option);
-            });
-        }
-        document.getElementById('object-filter').addEventListener('change', (e) => currentFilter = e.target.value);
-
-        // ================= 7. AI CORE LOOPS =================
-        async function loop() {
-            requestAnimationFrame(loop);
-            if (isProcessing || video.readyState !== 4 || video.paused || video.ended) return;
-            isProcessing = true;
-            try {
-                const [input, w, h] = preprocess(video);
-                const results = await session.run({ [session.inputNames[0]]: input });
-                const boxes = postprocess(results, w, h);
-                draw(boxes);
             } catch (e) {
-                console.error(e);
-            } finally {
-                isProcessing = false;
+                document.getElementById('controls-container').classList.remove('vanish');
+                alert("Error: " + e.message);
+                location.reload();
             }
+        });
+
+        // ================= CORE AI =================
+        async function detect() {
+            const [input, sx, sy] = preprocess(video, 320, 320);
+            const feeds = {}; feeds[session.inputNames[0]] = input;
+            const res = await session.run(feeds);
+            const output = res[session.outputNames[0]].data;
+            const boxes = postprocess(output, sx, sy);
+            draw(boxes);
+            requestAnimationFrame(detect);
         }
 
-        function preprocess(img) {
-            offscreenCtx.drawImage(img, 0, 0, MODEL_WIDTH, MODEL_HEIGHT);
-            const data = offscreenCtx.getImageData(0, 0, MODEL_WIDTH, MODEL_HEIGHT).data;
-            for(let i=0; i<MODEL_WIDTH*MODEL_HEIGHT; i++) {
-                modelBuffer[i] = data[i*4]/255.0;
-                modelBuffer[i+MODEL_WIDTH*MODEL_HEIGHT] = data[i*4+1]/255.0;
-                modelBuffer[i+2*MODEL_WIDTH*MODEL_HEIGHT] = data[i*4+2]/255.0;
-            }
-            return [new ort.Tensor("float32", modelBuffer, [1, 3, MODEL_WIDTH, MODEL_HEIGHT]), img.videoWidth/MODEL_WIDTH, img.videoHeight/MODEL_HEIGHT];
+        function preprocess(img, w, h) {
+            const c = document.createElement('canvas'); c.width=w; c.height=h;
+            const cx = c.getContext('2d'); cx.drawImage(img,0,0,w,h);
+            const d = cx.getImageData(0,0,w,h).data;
+            const f32 = new Float32Array(3*w*h);
+            for(let i=0; i<w*h; i++) { f32[i]=d[i*4]/255.0; f32[i+w*h]=d[i*4+1]/255.0; f32[i+2*w*h]=d[i*4+2]/255.0; }
+            return [new ort.Tensor("float32", f32, [1,3,h,w]), video.videoWidth/w, video.videoHeight/h];
         }
 
-        function postprocess(results, sx, sy) {
-            const output = results[Object.keys(results)[0]].data;
-            const boxes = [];
-            const numClasses = CLASS_KEYS.length;
-            const totalAnchors = 8400; // YOLO Default for 640x640
-
-            for(let i=0; i<totalAnchors; i++) {
-                let maxScore = 0, cls = -1;
-                for(let c=0; c<numClasses; c++) {
-                    const s = output[(c+4)*totalAnchors+i];
-                    if(s > maxScore) { maxScore = s; cls = c; }
-                }
-                if(maxScore > CONFIDENCE) {
-                    const x=output[0*totalAnchors+i], y=output[1*totalAnchors+i], w=output[2*totalAnchors+i], h=output[3*totalAnchors+i];
-                    boxes.push({
-                        x: (x-w/2)*sx, y: (y-h/2)*sy, w: w*sx, h: h*sy,
-                        score: maxScore, label: CLASS_KEYS[cls]
-                    });
-                }
+        function postprocess(data, sx, sy) {
+            const nc = CLASSES.length; const na = data.length/(4+nc); const boxes=[];
+            for(let i=0; i<na; i++) {
+                let maxS=0, maxC=-1;
+                for(let c=0; c<nc; c++) { const s=data[(4+c)*na+i]; if(s>maxS){maxS=s;maxC=c;} }
+                if(maxS > 0.25) { const x=data[0*na+i], y=data[1*na+i], w=data[2*na+i], h=data[3*na+i]; boxes.push({x:(x-w/2)*sx, y:(y-h/2)*sy, w:w*sx, h:h*sy, s:maxS, c:maxC}); }
             }
             return nms(boxes);
         }
 
         function nms(boxes) {
-            boxes.sort((a,b)=>b.score-a.score);
-            const res=[];
+            boxes.sort((a,b)=>b.s-a.s); const res=[];
             while(boxes.length) {
-                const best = boxes.shift();
-                res.push(best);
-                boxes = boxes.filter(b => {
-                    const xx1=Math.max(best.x, b.x), yy1=Math.max(best.y, b.y);
-                    const xx2=Math.min(best.x+best.w, b.x+b.w), yy2=Math.min(best.y+best.h, b.y+b.h);
-                    const inter=Math.max(0,xx2-xx1)*Math.max(0,yy2-yy1);
-                    return (inter/(best.w*best.h+b.w*b.h-inter)) < 0.5;
+                const b = boxes[0]; res.push(b);
+                boxes = boxes.filter(o => {
+                    const xx1=Math.max(b.x,o.x), yy1=Math.max(b.y,o.y), xx2=Math.min(b.x+b.w,o.x+o.w), yy2=Math.min(b.y+b.h,o.y+o.h);
+                    const int=Math.max(0,xx2-xx1)*Math.max(0,yy2-yy1);
+                    return int/(b.w*b.h+o.w*o.h-int) < 0.45;
                 });
             }
             return res;
         }
 
-        // ================= 8. DRAWING & SPEECH LOGIC =================
         function draw(boxes) {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            const foundSet = new Set();
+            const stage = document.getElementById('stage');
+            const scale = Math.min(stage.clientWidth/video.videoWidth, stage.clientHeight/video.videoHeight);
+            canvas.width = video.videoWidth * scale;
+            canvas.height = video.videoHeight * scale;
+            ctx.clearRect(0,0,canvas.width,canvas.height);
+
+            const found = new Set();
             const now = Date.now();
+            const theme = document.body.className;
+            let color='#00FFFF', font='16px Prompt';
+            if(theme.includes('ben10')) { color='#00FF00'; font='bold 20px Bangers'; }
+            if(theme.includes('barbie')) { color='#FF1493'; font='bold 16px Prompt'; }
 
-            // Setup Style based on Theme
-            let strokeColor, fontStyle, textColor;
-            if (currentTheme === 'theme-adult') { 
-                strokeColor = '#00FFFF'; fontStyle = '18px Orbitron'; textColor = '#00FFFF'; 
-            } else if (currentTheme === 'theme-boy') { 
-                strokeColor = '#00FF00'; fontStyle = 'bold 22px Bangers'; textColor = '#000'; 
-            } else { 
-                strokeColor = '#FF69B4'; fontStyle = 'bold 20px Prompt'; textColor = '#FFF'; 
-            }
+            boxes.forEach(b => {
+                const rawLabel = CLASSES[b.c];
+                if(currentFilter!=='all' && rawLabel!==currentFilter) return;
+                const labelObj = DICT[rawLabel] || {th:rawLabel, en:rawLabel};
+                const labelTxt = lang === 'th' ? labelObj.th : labelObj.en;
+                found.add(labelTxt);
 
-            boxes.forEach(box => {
-                if (currentFilter !== 'all' && box.label !== currentFilter) return;
-                
-                const displayText = visualLang === 'th' ? LABELS[box.label] : box.label;
-                const speakText = visualLang === 'th' ? LABELS[box.label] : box.label;
-                foundSet.add(displayText);
+                const x=b.x*scale, y=b.y*scale, w=b.w*scale, h=b.h*scale;
+                ctx.lineWidth = 3; ctx.strokeStyle = color;
+                if(theme.includes('ironman')) {
+                    const c = Math.min(w,h)*0.2;
+                    ctx.beginPath(); ctx.moveTo(x,y+c); ctx.lineTo(x,y); ctx.lineTo(x+c,y);
+                    ctx.moveTo(x+w-c,y); ctx.lineTo(x+w,y); ctx.lineTo(x+w,y+c);
+                    ctx.moveTo(x+w,y+h-c); ctx.lineTo(x+w,y+h); ctx.lineTo(x+w-c,y+h);
+                    ctx.moveTo(x+c,y+h); ctx.lineTo(x,y+h); ctx.lineTo(x,y+h-c); ctx.stroke();
+                } else if(theme.includes('ben10')) ctx.strokeRect(x,y,w,h);
+                else { ctx.setLineDash([10,5]); ctx.strokeRect(x,y,w,h); ctx.setLineDash([]); }
 
-                ctx.lineWidth = 3;
-                
-                // --- DRAWING SHAPES BY THEME ---
-                if (currentTheme === 'theme-adult') {
-                    // Iron Man: HUD Brackets
-                    ctx.strokeStyle = strokeColor;
-                    const len = Math.min(box.w, box.h) * 0.2;
-                    ctx.beginPath();
-                    ctx.moveTo(box.x, box.y+len); ctx.lineTo(box.x, box.y); ctx.lineTo(box.x+len, box.y);
-                    ctx.moveTo(box.x+box.w-len, box.y); ctx.lineTo(box.x+box.w, box.y); ctx.lineTo(box.x+box.w, box.y+len);
-                    ctx.moveTo(box.x+box.w, box.y+box.h-len); ctx.lineTo(box.x+box.w, box.y+box.h); ctx.lineTo(box.x+box.w-len, box.y+box.h);
-                    ctx.moveTo(box.x+len, box.y+box.h); ctx.lineTo(box.x, box.y+box.h); ctx.lineTo(box.x, box.y+box.h-len);
-                    ctx.stroke();
-                    // Label
-                    ctx.fillStyle = 'rgba(0, 30, 40, 0.7)';
-                    ctx.fillRect(box.x, box.y - 30, ctx.measureText(displayText).width + 20, 25);
-                    ctx.fillStyle = textColor; ctx.font = fontStyle; ctx.fillText(displayText, box.x + 10, box.y - 10);
-                } 
-                else if (currentTheme === 'theme-boy') {
-                    // Ben 10: Square Box
-                    ctx.strokeStyle = strokeColor; ctx.strokeRect(box.x, box.y, box.w, box.h);
-                    ctx.fillStyle = '#00FF00'; ctx.fillRect(box.x, box.y - 30, ctx.measureText(displayText).width + 20, 30);
-                    ctx.fillStyle = textColor; ctx.font = fontStyle; ctx.fillText(displayText, box.x + 5, box.y - 8);
-                }
-                else {
-                    // Barbie: Dashed & Round
-                    ctx.strokeStyle = strokeColor; ctx.setLineDash([15, 10]); ctx.strokeRect(box.x, box.y, box.w, box.h); ctx.setLineDash([]);
-                    ctx.fillStyle = 'rgba(255, 105, 180, 0.9)'; const tw = ctx.measureText(displayText).width + 30;
-                    ctx.beginPath(); ctx.roundRect(box.x, box.y-35, tw, 30, 15); ctx.fill();
-                    ctx.fillStyle = textColor; ctx.font = fontStyle; ctx.fillText(displayText, box.x + 15, box.y - 12);
-                }
+                ctx.fillStyle = theme.includes('barbie')?'rgba(255,192,203,0.8)':'rgba(0,20,30,0.7)';
+                const tw = ctx.measureText(labelTxt).width;
+                ctx.fillRect(x,y-30,tw+20,25);
+                ctx.fillStyle = color; ctx.font = font; ctx.fillText(labelTxt, x+10, y-12);
 
-                // --- SPEECH TRIGGER ---
-                // Only speak if NOT muted AND (never spoken OR spoken long ago)
-                if(!isMuted && (!lastSpoken.get(box.label) || now - lastSpoken.get(box.label) > 5000)) {
-                    speak(speakText, visualLang);
-                    lastSpoken.set(box.label, now);
+                if(!isMuted && (!lastSpoken.get(labelTxt) || now - lastSpoken.get(labelTxt) > 5000)) {
+                    speak(labelTxt); lastSpoken.set(labelTxt, now);
                 }
             });
-
-            // Update List UI
-            listEl.innerHTML = foundSet.size ? [...foundSet].map(t => `<li class="mb-1">🔹 ${t}</li>`).join('') : '<li class="opacity-50 text-xs">...</li>';
+            list.innerHTML = found.size ? [...found].map(t=>`<li>🔹 ${t}</li>`).join('') : '<li class="opacity-50 text-xs">Scanning...</li>';
         }
 
-        // --- Robust Speech Function ---
-        function speak(text, langCode) {
-            // If system is already speaking, check if we should interrupt
-            // We interrupt only if it's a UI command (button click cancels previous speech)
-            // But here inside draw loop, we generally wait.
-            if (synth.speaking && !synth.paused) return; 
-
-            const u = new SpeechSynthesisUtterance(text);
-            u.lang = langCode === 'th' ? 'th-TH' : 'en-US';
-            u.rate = 1.0;
-            
-            // Keep reference to prevent GC
-            currentUtterance = u; 
-            u.onend = () => currentUtterance = null;
-            
-            // Find best voice
-            const voice = synth.getVoices().find(v => v.lang.includes(langCode === 'th' ? 'th' : 'en'));
-            if (voice) u.voice = voice;
-            
-            synth.speak(u);
-        }
+        document.getElementById('btn-cam').onclick = async()=>{
+            const d = await navigator.mediaDevices.enumerateDevices();
+            videoDevices = d.filter(x=>x.kind==='videoinput');
+            if(videoDevices.length>1){
+                deviceIdx=(deviceIdx+1)%videoDevices.length;
+                video.srcObject = await navigator.mediaDevices.getUserMedia({video:{deviceId:{exact:videoDevices[deviceIdx].deviceId}}});
+            }
+        };
     </script>
 </body>
 </html>
